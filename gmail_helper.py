@@ -144,12 +144,23 @@ def _redirect_uri():
     return uri
 
 
-def build_auth_flow(state=None):
+PKCE_VERIFIER_FILENAME = "pkce_verifier.txt"
+
+
+def build_auth_flow(state=None, code_verifier=None):
     """Build a google_auth_oauthlib Flow for the web-based OAuth dance.
 
     Reads the OAuth client config from CREDENTIALS_FILENAME (a 'Web
     application' type client JSON, downloaded from Google Cloud Console),
     stored the same way as token.json (locally or in the GCS bucket).
+
+    google_auth_oauthlib uses PKCE by default, which means a random
+    code_verifier is generated when the Flow object is created. Since
+    /authorize and /oauth2callback are two separate HTTP requests (and on
+    Cloud Run, quite possibly two separate Flow objects / even container
+    instances), that verifier must be persisted somewhere in between and
+    passed back in here on the callback, or Google will reject the token
+    exchange with "Missing code verifier".
     """
     credentials_text = _read_text(CREDENTIALS_FILENAME)
     if not credentials_text:
@@ -164,7 +175,19 @@ def build_auth_flow(state=None):
         client_config, scopes=SCOPES, state=state
     )
     flow.redirect_uri = _redirect_uri()
+    if code_verifier:
+        flow.code_verifier = code_verifier
     return flow
+
+
+def save_pkce_verifier(code_verifier: str):
+    """Persist the PKCE code_verifier generated in /authorize."""
+    _write_text(PKCE_VERIFIER_FILENAME, code_verifier)
+
+
+def load_pkce_verifier():
+    """Retrieve the PKCE code_verifier saved by save_pkce_verifier()."""
+    return _read_text(PKCE_VERIFIER_FILENAME)
 
 
 def save_credentials_from_flow(flow):
@@ -249,3 +272,4 @@ if __name__ == "__main__":
         print("Snippet:", email["snippet"])
     else:
         print("No unread emails found.")
+      
