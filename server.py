@@ -34,6 +34,8 @@ from gmail_helper import (
     build_auth_flow,
     save_credentials_from_flow,
     is_authorized,
+    save_pkce_verifier,
+    load_pkce_verifier,
 )
 
 app = Flask(__name__)
@@ -125,8 +127,12 @@ def authorize():
         include_granted_scopes="true",
         prompt="consent",
     )
-    # Stash the state in a short-lived cookie-free way: Google echoes the
-    # state back to us on the callback, so we just pass it through the URL.
+    # Google echoes the state back to us on the callback, so that part
+    # round-trips through the URL on its own. The PKCE code_verifier does
+    # NOT round-trip anywhere automatically, so we persist it ourselves
+    # (same storage backend as token.json/credentials.json) and reload it
+    # in /oauth2callback below.
+    save_pkce_verifier(flow.code_verifier)
     return redirect(auth_url)
 
 
@@ -138,7 +144,8 @@ def oauth2callback():
     if error:
         return f"Authorization failed or was denied: {error}", 400
 
-    flow = build_auth_flow(state=state)
+    code_verifier = load_pkce_verifier()
+    flow = build_auth_flow(state=state, code_verifier=code_verifier)
     try:
         flow.fetch_token(authorization_response=request.url)
     except Exception as exc:  # noqa: BLE001
