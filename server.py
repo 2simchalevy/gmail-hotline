@@ -166,3 +166,4 @@ if __name__ == "__main__":
     # debug=True is handy for local development; Cloud Run runs with it off.
     debug = os.environ.get("GCS_BUCKET") is None
     app.run(host="0.0.0.0", port=port, debug=debug)
+save_pkce_verifier(flow.code_verifier)
